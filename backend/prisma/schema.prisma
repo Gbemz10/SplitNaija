@@ -1,0 +1,156 @@
+// SplitNaija — Prisma schema
+// Covers PRD §7.1–7.4 MVP scope: users, groups, expenses/splits, balances, settlements
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum SplitType {
+  EQUAL
+  PERCENTAGE
+  CUSTOM
+  ITEMIZED
+}
+
+enum ExpenseTemplate {
+  GENERIC
+  OWAMBE_CONTRIBUTION
+  AJO_ESUSU_ROUND
+  SHARED_SUBSCRIPTION
+  RENT
+}
+
+enum SettlementStatus {
+  PENDING
+  CONFIRMED
+  FAILED
+}
+
+enum RecurrenceFrequency {
+  WEEKLY
+  MONTHLY
+}
+
+// A registered user, authenticated via phone + OTP
+model User {
+  id           String   @id @default(uuid())
+  phoneNumber  String   @unique
+  displayName  String
+  createdAt    DateTime @default(now())
+
+  // Paystack transfer-recipient details — required before this user can
+  // *receive* a settlement payout (PRD §8 / build brief §4).
+  bankCode              String?
+  accountNumber         String?
+  accountName           String?
+  paystackRecipientCode String? @unique
+
+  memberships       GroupMember[]
+  expensesPaid      Expense[]        @relation("ExpensePayer")
+  expenseSplits     ExpenseSplit[]
+  settlementsFrom   Settlement[]     @relation("SettlementPayer")
+  settlementsTo     Settlement[]     @relation("SettlementPayee")
+}
+
+// Short-lived OTP codes for phone-number auth. Codes are stored hashed —
+// never in plaintext — with a TTL and an attempt counter to blunt brute force.
+model OtpCode {
+  id          String    @id @default(uuid())
+  phoneNumber String
+  codeHash    String
+  attempts    Int       @default(0)
+  expiresAt   DateTime
+  consumedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([phoneNumber])
+}
+
+// A group is a Splitwise-style group: roommates, a trip squad, an owambe committee, etc.
+model Group {
+  id          String   @id @default(uuid())
+  name        String
+  createdAt   DateTime @default(now())
+  inviteCode  String   @unique // used for the shareable join link/web-view preview (PRD §7.1)
+
+  members     GroupMember[]
+  expenses    Expense[]
+  settlements Settlement[]
+}
+
+// Join table. Includes non-registered participants (userId nullable) added via
+// phone number only — the WhatsApp non-user flow in PRD §7.5.
+model GroupMember {
+  id            String   @id @default(uuid())
+  groupId       String
+  userId        String?  // null until a phone-number-only invitee registers
+  phoneNumber   String   // always present; how non-users are identified/paid
+  displayName   String
+  joinedAt      DateTime @default(now())
+  isRegistered  Boolean  @default(false)
+
+  group  Group @relation(fields: [groupId], references: [id])
+  user   User? @relation(fields: [userId], references: [id])
+
+  @@unique([groupId, phoneNumber])
+}
+
+model Expense {
+  id            String            @id @default(uuid())
+  groupId       String
+  payerId       String
+  description   String
+  amountKobo    Int               // store naira amounts in kobo (integer) to avoid float rounding
+  splitType     SplitType
+  template      ExpenseTemplate   @default(GENERIC)
+  category      String?
+  note          String?
+  photoUrl      String?
+  createdAt     DateTime          @default(now())
+
+  // recurring expense config, e.g. monthly rent (PRD §7.2)
+  isRecurring        Boolean               @default(false)
+  recurrenceFreq     RecurrenceFrequency?
+  recurrenceParentId String?               // links generated instances back to the template expense
+
+  group  Group          @relation(fields: [groupId], references: [id])
+  payer  User           @relation("ExpensePayer", fields: [payerId], references: [id])
+  splits ExpenseSplit[]
+}
+
+// One row per group member's share of a given expense
+model ExpenseSplit {
+  id         String  @id @default(uuid())
+  expenseId  String
+  userId     String
+  shareKobo  Int     // this member's portion of the expense, in kobo
+
+  expense Expense @relation(fields: [expenseId], references: [id])
+  user    User    @relation(fields: [userId], references: [id])
+
+  @@unique([expenseId, userId])
+}
+
+// A settlement is a single simplified payment between two group members,
+// produced by the debt-simplification algorithm and executed via Paystack.
+model Settlement {
+  id                String            @id @default(uuid())
+  groupId           String
+  fromUserId        String
+  toUserId          String
+  amountKobo        Int
+  status            SettlementStatus  @default(PENDING)
+  paystackRef       String?           @unique
+  feeKobo           Int               @default(0)
+  createdAt         DateTime          @default(now())
+  confirmedAt       DateTime?
+
+  group Group @relation(fields: [groupId], references: [id])
+  from  User  @relation("SettlementPayer", fields: [fromUserId], references: [id])
+  to    User  @relation("SettlementPayee", fields: [toUserId], references: [id])
+}
