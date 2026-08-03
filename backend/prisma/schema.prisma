@@ -36,12 +36,33 @@ enum RecurrenceFrequency {
   MONTHLY
 }
 
-// A registered user, authenticated via phone + OTP
+// A registered user, authenticated via phone + password (phone is verified
+// once via OTP at signup, and again if the password is reset).
 model User {
   id           String   @id @default(uuid())
   phoneNumber  String   @unique
   displayName  String
   createdAt    DateTime @default(now())
+
+  // Set by DELETE /auth/me. Deleting a user row outright isn't safe here —
+  // Expense/ExpenseSplit/Settlement rows have no onDelete: Cascade (on
+  // purpose: a user's expensesPaid/expenseSplits are *shared* group history,
+  // not private data, and hard-deleting them would silently rewrite other
+  // members' balances). So "delete account" instead scrubs personal
+  // identifiers (see the /auth/me DELETE handler) and sets this, while the
+  // row itself stays to keep everyone else's shared history intact.
+  deletedAt DateTime?
+
+  // A small base64-encoded image (data URI), not a CDN/object-storage URL —
+  // there's no file storage service wired up yet, so this stores the photo
+  // inline in Postgres as TEXT. Fine for a profile-picture-sized image;
+  // revisit if this ever needs to hold anything larger.
+  photoUrl String?
+
+  // Null only for rows created before password auth existed; every user
+  // created via POST /auth/signup has one. Never serialize this to a
+  // client response — see `toPublicUser()` in src/lib/user.ts.
+  passwordHash String?
 
   // Paystack transfer-recipient details — required before this user can
   // *receive* a settlement payout (PRD §8 / build brief §4).
@@ -49,6 +70,13 @@ model User {
   accountNumber         String?
   accountName           String?
   paystackRecipientCode String? @unique
+
+  // FCM device tokens for push notifications. An array, not a single field,
+  // because one account can be logged in on more than one device (a phone
+  // reinstall leaves a stale token behind too) — a send goes out to every
+  // token on file, and dead ones get pruned when Firebase reports them as
+  // invalid/unregistered. Never serialize this to a client response.
+  pushTokens String[] @default([])
 
   memberships       GroupMember[]
   expensesPaid      Expense[]        @relation("ExpensePayer")

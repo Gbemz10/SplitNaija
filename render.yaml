@@ -1,0 +1,50 @@
+databases: []
+
+services:
+  - type: web
+    name: splitnaija-backend
+    runtime: node
+    rootDir: backend
+    plan: free
+    buildCommand: npm install && npm run build
+    # `prisma migrate deploy` (not `migrate dev`) — the non-interactive
+    # variant meant for production, applies whatever migrations aren't
+    # already applied and exits. Safe to run on every deploy: a no-op if
+    # nothing's pending.
+    startCommand: npx prisma migrate deploy && npm start
+    envVars:
+      # Paste in the connection string from your Neon project (Neon's
+      # dashboard calls it the "pooled connection string") — not stored in
+      # this file since it's a secret.
+      - key: DATABASE_URL
+        sync: false
+      # Render generates a real random value for this on first deploy — the
+      # repo's local .env still has the placeholder "change-me-in-production"
+      # on purpose, since that file is never what production actually uses.
+      - key: JWT_SECRET
+        generateValue: true
+      - key: PAYSTACK_SECRET_KEY
+        sync: false
+      # Leave "true" while waiting on Paystack business verification — see
+      # the comment above this same var in backend/src/routes/settlements.ts.
+      # Flip to "false" the moment real transfers should start happening.
+      - key: PAYSTACK_SIMULATE_TRANSFERS
+        value: "true"
+      # Optional: without this, OTP codes only ever appear in Render's log
+      # stream (Dashboard → Logs), not delivered anywhere a tester could see
+      # them. Fine for you to watch and relay manually to a couple of
+      # testers; get a real key from termii.com if more people need to sign
+      # up without you in the loop.
+      - key: TERMII_API_KEY
+        sync: false
+        value: ""
+      - key: TERMII_SENDER_ID
+        value: "SplitNaija"
+      - key: TERMII_BASE_URL
+        value: "https://v4.api.termii.com/api"
+      # TEMPORARY — see the comment above OTP_BYPASS_VERIFICATION in
+      # backend/src/services/otp.ts. Set to "false" once Termii Sender ID
+      # approval clears; leaving it "true" means phone numbers are never
+      # actually verified.
+      - key: OTP_BYPASS_VERIFICATION
+        value: "true"

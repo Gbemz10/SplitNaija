@@ -4,6 +4,17 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// The google-services plugin hard-fails the entire build if
+// google-services.json isn't present — not a graceful no-op like the rest
+// of this push-notifications setup. Applying it conditionally here means a
+// `flutter run` still works today, before Firebase is set up, and starts
+// picking up push notifications the moment that file is dropped in with no
+// other change needed. See PUSH_NOTIFICATIONS_SETUP.md in the repo root for
+// where it comes from.
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+}
+
 android {
     namespace = "com.example.splitnaija"
     compileSdk = flutter.compileSdkVersion
