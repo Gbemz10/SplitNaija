@@ -1,13 +1,24 @@
 import 'dart:convert';
+import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
 
+/// Backend base URL, resolved in priority order:
+/// 1. `--dart-define=API_BASE_URL=http://your-value` at build/run time —
+///    use this for a physical device (your Mac's LAN IP) or a staging server.
+/// 2. Platform default: `10.0.2.2` for the Android emulator (its alias for
+///    the host machine), `localhost` everywhere else (iOS Simulator, web).
+const String _definedBaseUrl = String.fromEnvironment('API_BASE_URL');
+
+String _defaultBaseUrl() {
+  if (_definedBaseUrl.isNotEmpty) return _definedBaseUrl;
+  if (!kIsWeb && Platform.isAndroid) return 'http://10.0.2.2:4000';
+  return 'http://localhost:4000';
+}
+
 /// Thin wrapper around the backend REST API.
-///
-/// Point [baseUrl] at your deployed backend. When running on an Android
-/// emulator against a locally-running backend, use 10.0.2.2 instead of
-/// localhost; on a physical device, use your machine's LAN IP.
 class ApiClient {
-  ApiClient({this.baseUrl = 'http://10.0.2.2:4000'});
+  ApiClient({String? baseUrl}) : baseUrl = baseUrl ?? _defaultBaseUrl();
 
   final String baseUrl;
   String? _authToken;
@@ -30,6 +41,24 @@ class ApiClient {
 
   Future<Map<String, dynamic>> get(String path) async {
     final res = await http.get(Uri.parse('$baseUrl$path'), headers: _headers);
+    return _handle(res);
+  }
+
+  Future<Map<String, dynamic>> delete(String path, {Map<String, dynamic>? body}) async {
+    final res = await http.delete(
+      Uri.parse('$baseUrl$path'),
+      headers: _headers,
+      body: body != null ? jsonEncode(body) : null,
+    );
+    return _handle(res);
+  }
+
+  Future<Map<String, dynamic>> patch(String path, Map<String, dynamic> body) async {
+    final res = await http.patch(
+      Uri.parse('$baseUrl$path'),
+      headers: _headers,
+      body: jsonEncode(body),
+    );
     return _handle(res);
   }
 

@@ -13,6 +13,8 @@ dependencies:
   provider: ^6.1.2
   flutter_secure_storage: ^9.2.2
   intl: ^0.19.0
+  image_picker: ^1.1.2
+  url_launcher: ^6.3.1
 
 dev_dependencies:
   flutter_test:
@@ -21,3 +23,29 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+  fonts:
+    # Variable fonts — the same file is listed once per weight; Flutter
+    # picks the matching instance off the font's wght axis at render time.
+    - family: Plus Jakarta Sans
+      fonts:
+        - asset: "assets/fonts/PlusJakartaSans[wght].ttf"
+          weight: 200
+        - asset: "assets/fonts/PlusJakartaSans[wght].ttf"
+          weight: 300
+        - asset: "assets/fonts/PlusJakartaSans[wght].ttf"
+          weight: 400
+        - asset: "assets/fonts/PlusJakartaSans[wght].ttf"
+          weight: 500
+        - asset: "assets/fonts/PlusJakartaSans[wght].ttf"
+          weight: 600
+        - asset: "assets/fonts/PlusJakartaSans[wght].ttf"
+          weight: 700
+        - asset: "assets/fonts/PlusJakartaSans[wght].ttf"
+          weight: 800
+        - asset: "assets/fonts/PlusJakartaSans-Italic[wght].ttf"
+          weight: 400
+          style: italic
+        - asset: "assets/fonts/PlusJakartaSans-Italic[wght].ttf"
+          weight: 700
+          style: italic
