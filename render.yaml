@@ -37,7 +37,6 @@ services:
       # up without you in the loop.
       - key: TERMII_API_KEY
         sync: false
-        value: ""
       - key: TERMII_SENDER_ID
         value: "SplitNaija"
       - key: TERMII_BASE_URL
