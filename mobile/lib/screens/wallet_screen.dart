@@ -82,6 +82,8 @@ class _WalletScreenState extends RefreshableState<WalletScreen> {
                   Expanded(
                     child: RefreshIndicator(
                       onRefresh: _load,
+                      color: kBrandPurple,
+                      backgroundColor: Colors.white,
                       child: AsyncView<List<SettlementRecord>>(
                         loading: _settlements == null && _error == null,
                         error: _error,
@@ -226,7 +228,7 @@ class _SettlementTile extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    '${settlement.groupName} · ${DateFormat.yMMMd().format(settlement.createdAt)}',
+                    '${settlement.groupName} · ${DateFormat.yMMMd().add_jm().format(settlement.createdAt)}',
                     style: TextStyle(color: Colors.black.withOpacity(0.55), fontSize: 13),
                     overflow: TextOverflow.ellipsis,
                   ),

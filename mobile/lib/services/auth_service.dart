@@ -24,6 +24,24 @@ class AuthService extends ChangeNotifier {
   User? _currentUser;
   User? get currentUser => _currentUser;
 
+  /// Set once via [attachPushService] from main.dart after both services
+  /// exist — a pair of callbacks rather than a constructor param, since
+  /// PushService itself needs a reference back to this AuthService (to know
+  /// who's signed in) and Dart doesn't love two classes constructor-
+  /// depending on each other. Left null if push was never wired up (e.g. no
+  /// Firebase project configured yet), in which case every call site below
+  /// is just a no-op.
+  Future<void> Function()? _registerDeviceForPush;
+  Future<void> Function()? _unregisterDeviceFromPush;
+
+  void attachPushService({
+    required Future<void> Function() onSignedIn,
+    required Future<void> Function() onSignedOut,
+  }) {
+    _registerDeviceForPush = onSignedIn;
+    _unregisterDeviceFromPush = onSignedOut;
+  }
+
   /// Sends a 6-digit SMS code to [phoneNumber]. Used both to kick off
   /// signup (verify the number is real) and forgot-password (prove the
   /// caller owns the number before letting them set a new password).
@@ -97,6 +115,7 @@ class AuthService extends ChangeNotifier {
     _api.setAuthToken(token);
     _currentUser = user;
     notifyListeners();
+    unawaited(_registerDeviceForPush?.call());
   }
 
   /// Restores a saved session. Shows the cached user immediately (so the
@@ -119,6 +138,7 @@ class AuthService extends ChangeNotifier {
     }
     notifyListeners();
     unawaited(refreshCurrentUser());
+    unawaited(_registerDeviceForPush?.call());
     return true;
   }
 
@@ -179,6 +199,12 @@ class AuthService extends ChangeNotifier {
   }
 
   Future<void> logout() async {
+    // Must happen before the auth token is cleared below — the backend
+    // route this hits requires a valid session to know whose device-token
+    // list to remove this device from. Best-effort: if it fails (offline,
+    // say), the token just sits there until Firebase eventually reports it
+    // dead, rather than blocking sign-out on it.
+    await _unregisterDeviceFromPush?.call();
     await _storage.delete(key: _tokenKey);
     await _storage.delete(key: _userKey);
     _api.setAuthToken(null);

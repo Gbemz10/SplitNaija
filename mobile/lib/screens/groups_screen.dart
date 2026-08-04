@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../models/models.dart';
+import '../services/api_client.dart' show ApiException;
 import '../services/auth_service.dart';
 import '../services/group_service.dart';
 import '../theme.dart';
@@ -135,9 +136,39 @@ class _GroupsScreenState extends RefreshableState<GroupsScreen> {
       if (mounted) setState(() => _groups?.removeWhere((g) => g.id == group.id));
       return true;
     } catch (e) {
-      // Return false so the card animates back into place instead of
-      // vanishing — it wasn't actually deleted (e.g. a 403 if this isn't
-      // the group's creator).
+      // DELETE actually runs a 5-query transaction server-side (splits,
+      // expenses, settlements, members, then the group itself), so it isn't
+      // instant — if the connection drops or times out anywhere after the
+      // request reached the server but before the response made it back,
+      // the deletion still completes, but this catch block still fires. The
+      // old behavior assumed any error meant "not deleted" and put the card
+      // back, which is wrong exactly in that case: the group really is gone
+      // server-side, the app just doesn't know it yet.
+      //
+      // Rather than guess, ask the server what's actually true. A clean
+      // 403/404 (real failure — not the creator, or already gone another
+      // way) still surfaces as an error and the card returns. But a
+      // connection-level failure (SocketException/TimeoutException, not an
+      // ApiException) gets one re-check against GET /groups before deciding.
+      if (e is! ApiException) {
+        try {
+          final freshGroups = await context.read<GroupService>().listMyGroups();
+          final stillExists = freshGroups.any((g) => g.id == group.id);
+          if (!mounted) return !stillExists;
+          if (!stillExists) {
+            // It went through — the earlier error was just a lost response,
+            // not a failed delete. Reflect reality instead of showing a
+            // scary "check your connection" message for something that
+            // actually succeeded.
+            setState(() => _groups = freshGroups);
+            return true;
+          }
+          setState(() => _groups = freshGroups);
+        } catch (_) {
+          // Couldn't even re-check — fall through to showing the original
+          // error below, still safer than silently assuming success.
+        }
+      }
       if (mounted) showApiError(context, e);
       return false;
     }
@@ -239,6 +270,8 @@ class _GroupsScreenState extends RefreshableState<GroupsScreen> {
                     Expanded(
                       child: RefreshIndicator(
                         onRefresh: _load,
+                        color: kBrandPurple,
+                        backgroundColor: Colors.white,
                         child: AsyncView<List<Group>>(
                           loading: _groups == null && _error == null,
                           error: _error,

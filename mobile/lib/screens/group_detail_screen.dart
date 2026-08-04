@@ -565,7 +565,6 @@ class _SettlementConfirmSheet extends StatelessWidget {
               const SizedBox(height: kSpacingLg),
               BrandButton(
                 label: 'Pay ${formatKobo(amountKobo)}',
-                icon: Icons.paid_rounded,
                 onPressed: () => Navigator.pop(context, true),
               ),
             ],

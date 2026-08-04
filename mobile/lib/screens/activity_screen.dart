@@ -116,6 +116,8 @@ class _ActivityScreenState extends RefreshableState<ActivityScreen> {
                   Expanded(
                     child: RefreshIndicator(
                       onRefresh: _load,
+                      color: kBrandPurple,
+                      backgroundColor: Colors.white,
                       child: AsyncView<List<_ActivityEntry>>(
                         loading: _entries == null && _error == null,
                         error: _error,
